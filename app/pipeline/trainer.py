@@ -1,4 +1,3 @@
-
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -22,8 +21,12 @@ def train_classification(X, y):
     Winner = higher macro F1-Score on test set.
     Returns: best_model, best_name, all_metrics dict
     """
+    # Use stratify only when every class has at least 2 samples
+    class_counts = np.bincount(y)
+    stratify = y if class_counts.min() >= 2 else None
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=0.2, random_state=42, stratify=stratify
     )
 
     candidates = {

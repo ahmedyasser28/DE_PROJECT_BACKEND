@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import TrainRequest, MetricsResponse
 from app.pipeline.preprocessor import preprocess
@@ -37,6 +36,37 @@ def train_model(request: TrainRequest):
             status_code=400,
             detail="target_column is required for classification and regression tasks.",
         )
+
+    # ── Guard: warn if continuous variable used for classification ────────
+    if task == "classification" and request.target_column:
+        target_col = df[request.target_column]
+        n_unique = target_col.nunique()
+        n_rows = len(df)
+        if n_unique > 20 or (n_unique / n_rows) > 0.5:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"The selected target column '{request.target_column}' appears to be a "
+                    f"continuous variable ({n_unique} unique values). "
+                    f"Classification requires categorical targets (e.g. Male/Female, Yes/No). "
+                    f"Please use Regression instead."
+                ),
+            )
+
+    # ── Guard: warn if categorical variable used for regression ──────────
+    if task == "regression" and request.target_column:
+        n_unique = df[request.target_column].nunique()
+        is_numeric = df[request.target_column].dtype in ["int64", "float64", "int32", "float32"]
+        if not is_numeric or n_unique <= 10:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"The selected target column '{request.target_column}' appears to be a "
+                    f"categorical variable ({n_unique} unique values). "
+                    f"Regression requires a continuous numeric target (e.g. Price, Age, Score). "
+                    f"Please use Classification instead."
+                ),
+            )
 
     # ── Preprocessing ────────────────────────────────────────────────────
     try:

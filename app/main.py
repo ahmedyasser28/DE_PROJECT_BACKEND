@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.export import router as export_router
 from app.routers.train import router as train_router
@@ -9,6 +10,13 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AutoML API",
         version="0.1.0",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/health", tags=["Health"])
