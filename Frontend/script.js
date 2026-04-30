@@ -16,43 +16,47 @@ const downloadBtn = document.getElementById("downloadBtn");
 const previewPanel = document.getElementById("preview");
 const resultsPanel = document.getElementById("results");
 
+//task type selection
 taskTypeSelect.addEventListener("change", function () {
   const requiresTarget =
     this.value === "classification" || this.value === "regression";
   const isClustering = this.value === "clustering";
 
   targetDiv.classList.toggle("is-hidden", !requiresTarget);
-  document.getElementById("clustersDiv").classList.toggle("is-hidden", !isClustering);
+  document
+    .getElementById("clustersDiv")
+    .classList.toggle("is-hidden", !isClustering);
 
   if (requiresTarget) {
     loadColumns();
   }
 });
 
+//status
 function setStatus(message, type = "info") {
   const status = document.getElementById("statusMessage");
   status.textContent = message;
   status.className = `status-banner ${type}`;
 }
-
+//button label helpers
 function setButtonLabel(button, label) {
   if (!button.dataset.defaultLabel) {
     button.dataset.defaultLabel = button.textContent;
   }
   button.textContent = label;
 }
-
+//reset button to original label
 function resetButtonLabel(button) {
   if (button.dataset.defaultLabel) {
     button.textContent = button.dataset.defaultLabel;
   }
 }
-
+//empty state
 function setEmptyState(element, message) {
   element.classList.add("empty-state");
   element.textContent = message;
 }
-
+//format values for display
 function formatValue(value) {
   if (value === null || value === undefined || value === "") {
     return "—";
@@ -68,7 +72,7 @@ function formatValue(value) {
 
   return String(value);
 }
-
+//render dataset preview
 function renderPreview(dataset) {
   previewPanel.classList.remove("empty-state");
   previewPanel.innerHTML = "";
@@ -153,7 +157,7 @@ function renderPreview(dataset) {
 
   previewPanel.appendChild(stack);
 }
-
+//load columns into target column dropdown
 function loadColumns() {
   const select = document.getElementById("targetColumn");
   select.innerHTML = "";
@@ -174,7 +178,7 @@ function loadColumns() {
     select.appendChild(option);
   });
 }
-
+//render confusion matrix
 function renderConfusionMatrix(matrix) {
   const wrap = document.createElement("div");
   wrap.className = "cm-wrap";
@@ -219,12 +223,12 @@ function renderConfusionMatrix(matrix) {
       td.textContent = val;
       const intensity = maxVal > 0 ? val / maxVal : 0;
       if (i === j) {
-        // Diagonal = correct predictions (green tint)
+        // Diagonal correct predictions (green color)
         td.style.background = `rgba(18, 113, 91, ${0.1 + intensity * 0.55})`;
         td.style.color = intensity > 0.5 ? "#0a4f3a" : "var(--text)";
         td.style.fontWeight = "700";
       } else if (val > 0) {
-        // Off-diagonal = errors (red tint)
+        // Off-diagonal errors (red color)
         td.style.background = `rgba(180, 35, 24, ${0.05 + intensity * 0.4})`;
         td.style.color = intensity > 0.5 ? "#7a1810" : "var(--text)";
       }
@@ -244,7 +248,7 @@ function renderConfusionMatrix(matrix) {
 
   return wrap;
 }
-
+//render comparison of all models
 function renderModelComparison(allModels, bestModel) {
   const section = document.createElement("div");
   section.className = "comparison-section";
@@ -256,7 +260,8 @@ function renderModelComparison(allModels, bestModel) {
 
   Object.entries(allModels).forEach(([modelName, metrics]) => {
     const card = document.createElement("div");
-    card.className = "comparison-card" + (modelName === bestModel ? " is-best" : "");
+    card.className =
+      "comparison-card" + (modelName === bestModel ? " is-best" : "");
 
     const header = document.createElement("div");
     header.className = "comparison-card-header";
@@ -303,7 +308,7 @@ function renderModelComparison(allModels, bestModel) {
 
   return section;
 }
-
+//display results in the UI
 function displayResults(data) {
   const metrics = data?.metrics || {};
   const entries = Object.entries(metrics);
@@ -315,11 +320,12 @@ function displayResults(data) {
   if (entries.length === 0) {
     resultsPanel.classList.add("empty-state");
     resultsPanel.classList.remove("results-full");
-    resultsPanel.textContent = "Training finished, but no metrics were returned.";
+    resultsPanel.textContent =
+      "Training finished, but no metrics were returned.";
     return;
   }
 
-  // ── Best model banner ──────────────────────────────────────────────
+  //Best model banner
   if (data.best_model) {
     const banner = document.createElement("div");
     banner.className = "best-model-banner";
@@ -327,7 +333,7 @@ function displayResults(data) {
     resultsPanel.appendChild(banner);
   }
 
-  // ── Best model metrics cards ───────────────────────────────────────
+  //Best model metrics cards
   const grid = document.createElement("div");
   grid.className = "results-grid-inner";
 
@@ -357,18 +363,23 @@ function displayResults(data) {
 
   resultsPanel.appendChild(grid);
 
-  // ── Confusion matrix visual ────────────────────────────────────────
+  //Confusion matrix visual
   if (confusionMatrix && Array.isArray(confusionMatrix)) {
     resultsPanel.appendChild(renderConfusionMatrix(confusionMatrix));
   }
 
-  // ── All models comparison ──────────────────────────────────────────
-  if (data.all_models_metrics && Object.keys(data.all_models_metrics).length > 1) {
-    resultsPanel.appendChild(renderModelComparison(data.all_models_metrics, data.best_model));
+  //All models comparison
+  if (
+    data.all_models_metrics &&
+    Object.keys(data.all_models_metrics).length > 1
+  ) {
+    resultsPanel.appendChild(
+      renderModelComparison(data.all_models_metrics, data.best_model),
+    );
   }
 }
 
-// ─── UPLOAD ────────────────────────────────────────────────────────────────────
+//upload file to backend
 async function uploadFile() {
   const fileInput = document.getElementById("fileInput");
   const uploadBtn = document.getElementById("uploadBtn");
@@ -434,7 +445,10 @@ async function uploadFile() {
     uploadedDataset = null;
     columns = [];
     trainBtn.disabled = true;
-    setEmptyState(previewPanel, "Upload a dataset to preview sample rows here.");
+    setEmptyState(
+      previewPanel,
+      "Upload a dataset to preview sample rows here.",
+    );
     setStatus(error.message || "Unable to upload the dataset.", "error");
   } finally {
     uploadBtn.disabled = false;
@@ -442,7 +456,7 @@ async function uploadFile() {
   }
 }
 
-// ─── TRAIN ─────────────────────────────────────────────────────────────────────
+//train model
 async function trainModel() {
   const task = taskTypeSelect.value;
   const target = document.getElementById("targetColumn").value;
@@ -458,7 +472,10 @@ async function trainModel() {
   }
 
   if ((task === "classification" || task === "regression") && !target) {
-    setStatus("Choose a target column for the selected supervised task.", "error");
+    setStatus(
+      "Choose a target column for the selected supervised task.",
+      "error",
+    );
     return;
   }
 
@@ -499,10 +516,7 @@ async function trainModel() {
 
     displayResults(data);
     downloadBtn.disabled = false;
-    setStatus(
-      `Training complete! Best model: ${data.best_model}`,
-      "success",
-    );
+    setStatus(`Training complete! Best model: ${data.best_model}`, "success");
   } catch (error) {
     setEmptyState(resultsPanel, "Run AutoML to display evaluation metrics.");
     setStatus(error.message || "Unable to complete training.", "error");
@@ -512,7 +526,7 @@ async function trainModel() {
   }
 }
 
-// ─── DOWNLOAD ──────────────────────────────────────────────────────────────────
+//download model
 async function downloadModel() {
   if (!lastTrainingRun) {
     setStatus("Run AutoML training before downloading the model.", "error");
