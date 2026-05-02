@@ -16,12 +16,6 @@ from sklearn.metrics import (
 # ======================================================================== #
 
 def train_classification(X, y):
-    """
-    Train Logistic Regression vs KNN Classifier.
-    Winner = higher macro F1-Score on test set.
-    Returns: best_model, best_name, all_metrics dict
-    """
-    # Use stratify only when every class has at least 2 samples
     class_counts = np.bincount(y)
     stratify = y if class_counts.min() >= 2 else None
 
@@ -52,8 +46,8 @@ def train_classification(X, y):
         all_metrics[name] = metrics
 
         if metrics["f1_score"] > best_f1:
-            best_f1   = metrics["f1_score"]
-            best_name = name
+            best_f1    = metrics["f1_score"]
+            best_name  = name
             best_model = model
 
     return best_model, best_name, all_metrics
@@ -64,11 +58,6 @@ def train_classification(X, y):
 # ======================================================================== #
 
 def train_regression(X, y):
-    """
-    Train Linear Regression vs KNN Regressor.
-    Winner = higher R² Score on test set.
-    Returns: best_model, best_name, all_metrics dict
-    """
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -86,53 +75,96 @@ def train_regression(X, y):
         y_pred = model.predict(X_test)
 
         metrics = {
-            "MAE":  round(float(mean_absolute_error(y_test, y_pred)), 4),
-            "MSE":  round(float(mean_squared_error(y_test, y_pred)), 4),
-            "R2":   round(float(r2_score(y_test, y_pred)), 4),
+            "MAE": round(float(mean_absolute_error(y_test, y_pred)), 4),
+            "MSE": round(float(mean_squared_error(y_test, y_pred)), 4),
+            "R2":  round(float(r2_score(y_test, y_pred)), 4),
         }
         all_metrics[name] = metrics
 
         if metrics["R2"] > best_r2:
-            best_r2   = metrics["R2"]
-            best_name = name
+            best_r2    = metrics["R2"]
+            best_name  = name
             best_model = model
 
     return best_model, best_name, all_metrics
 
 
 # ======================================================================== #
-#  CLUSTERING
+#  CLUSTERING  —  each algorithm finds its own optimal k via silhouette score
 # ======================================================================== #
 
-def train_clustering(X, n_clusters: int = 3):
+def find_optimal_k_kmeans(X, k_min: int = 2, k_max: int = 10):
+    """Find optimal k for KMeans using silhouette scores."""
+    k_max = min(k_max, len(X) - 1)
+    scores = {}
+    for k in range(k_min, k_max + 1):
+        labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X)
+        if len(np.unique(labels)) < 2:
+            scores[k] = -1.0
+        else:
+            scores[k] = round(float(silhouette_score(X, labels)), 4)
+    best_k = max(scores, key=scores.get)
+    return best_k, scores
+
+
+def find_optimal_k_agglomerative(X, k_min: int = 2, k_max: int = 10):
+    """Find optimal k for Agglomerative Clustering using silhouette scores."""
+    k_max = min(k_max, len(X) - 1)
+    scores = {}
+    for k in range(k_min, k_max + 1):
+        labels = AgglomerativeClustering(n_clusters=k).fit_predict(X)
+        if len(np.unique(labels)) < 2:
+            scores[k] = -1.0
+        else:
+            scores[k] = round(float(silhouette_score(X, labels)), 4)
+    best_k = max(scores, key=scores.get)
+    return best_k, scores
+
+
+def train_clustering(X):
     """
-    Train KMeans vs Agglomerative Clustering.
-    Winner = higher Silhouette Score.
-    Returns: best_model, best_name, all_metrics dict, best_labels
+    Each algorithm independently finds its own optimal k using silhouette scores (k=2..10).
+    Winner = higher Silhouette Score at their respective optimal k.
+    Returns: best_model, best_name, all_metrics dict, best_labels, optimal_k, k_scores
     """
+    # Step 1 — find optimal k separately for each algorithm
+    kmeans_k, kmeans_k_scores = find_optimal_k_kmeans(X)
+    agglo_k,  agglo_k_scores  = find_optimal_k_agglomerative(X)
+
+    # Step 2 — train each algorithm with its own optimal k
     candidates = {
-        "KMeans":                  KMeans(n_clusters=n_clusters, random_state=42, n_init=10),
-        "Agglomerative Clustering": AgglomerativeClustering(n_clusters=n_clusters),
+        "KMeans": (
+            KMeans(n_clusters=kmeans_k, random_state=42, n_init=10),
+            kmeans_k,
+            kmeans_k_scores,
+        ),
+        "Agglomerative Clustering": (
+            AgglomerativeClustering(n_clusters=agglo_k),
+            agglo_k,
+            agglo_k_scores,
+        ),
     }
 
     all_metrics = {}
     best_name, best_model, best_score, best_labels = None, None, -1, None
+    best_k, best_k_scores = None, None
 
-    for name, model in candidates.items():
+    for name, (model, optimal_k, k_scores) in candidates.items():
         labels = model.fit_predict(X)
-        # Silhouette requires at least 2 distinct labels
         n_unique = len(np.unique(labels))
-        if n_unique < 2:
-            sil = -1.0
-        else:
-            sil = round(float(silhouette_score(X, labels)), 4)
+        sil = round(float(silhouette_score(X, labels)), 4) if n_unique >= 2 else -1.0
 
-        all_metrics[name] = {"silhouette_score": sil}
+        all_metrics[name] = {
+            "silhouette_score": sil,
+            "optimal_k":        optimal_k,
+        }
 
         if sil > best_score:
-            best_score  = sil
-            best_name   = name
-            best_model  = model
-            best_labels = labels
+            best_score    = sil
+            best_name     = name
+            best_model    = model
+            best_labels   = labels
+            best_k        = optimal_k
+            best_k_scores = k_scores
 
-    return best_model, best_name, all_metrics, best_labels
+    return best_model, best_name, all_metrics, best_labels, best_k, best_k_scores

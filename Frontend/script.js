@@ -248,6 +248,108 @@ function renderConfusionMatrix(matrix) {
 
   return wrap;
 }
+
+// ── Optimal k silhouette chart ──────────────────────────────────────────
+function renderKChart(optimalK, kScores) {
+  const entries = Object.entries(kScores).map(([k, v]) => ({ k: parseInt(k), v }));
+  entries.sort((a, b) => a.k - b.k);
+  const bestScore = Math.max(...entries.map(e => e.v));
+
+  const wrap = document.createElement("div");
+  wrap.className = "kchart-wrap";
+
+  // header
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <p style="margin:0;font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-secondary);">Optimal k selection</p>
+      <span class="best-badge" style="font-size:12px;padding:3px 10px;">k = ${optimalK} selected</span>
+    </div>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-secondary);">Silhouette score for each k tested (2–10). Highest score wins.</p>
+    <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
+      <div class="kchart-stat">
+        <span class="kchart-stat-label">Best k</span>
+        <span class="kchart-stat-val">${optimalK}</span>
+      </div>
+      <div class="kchart-stat">
+        <span class="kchart-stat-label">Best score</span>
+        <span class="kchart-stat-val" style="color:var(--color-text-success);">${bestScore.toFixed(3)}</span>
+      </div>
+      <div class="kchart-stat">
+        <span class="kchart-stat-label">k range</span>
+        <span class="kchart-stat-val">2 – 10</span>
+      </div>
+    </div>
+    <div style="position:relative;width:100%;height:200px;">
+      <canvas id="kChartCanvas" role="img" aria-label="Bar chart of silhouette scores for k values from 2 to 10.">Silhouette scores per k value.</canvas>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);">
+        <span style="width:10px;height:10px;border-radius:2px;background:#1D9E75;display:inline-block;"></span>Best k
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);">
+        <span style="width:10px;height:10px;border-radius:2px;background:#B5D4F4;display:inline-block;"></span>Other k values
+      </span>
+    </div>
+  `;
+
+  // load Chart.js and draw after DOM insertion
+  setTimeout(() => {
+    if (!window.Chart) {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
+      script.onload = () => drawKChart(entries, optimalK);
+      document.head.appendChild(script);
+    } else {
+      drawKChart(entries, optimalK);
+    }
+  }, 100);
+
+  return wrap;
+}
+
+function drawKChart(entries, optimalK) {
+  const canvas = document.getElementById("kChartCanvas");
+  if (!canvas) return;
+  new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: entries.map(e => `k=${e.k}`),
+      datasets: [{
+        label: "Silhouette score",
+        data: entries.map(e => e.v),
+        backgroundColor: entries.map(e => e.k === optimalK ? "#1D9E75" : "#B5D4F4"),
+        borderColor:     entries.map(e => e.k === optimalK ? "#0F6E56" : "#378ADD"),
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Silhouette: ${ctx.parsed.y.toFixed(3)}${ctx.label === "k="+optimalK ? " ★ best" : ""}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 12 }, autoSkip: false, maxRotation: 0 }
+        },
+        y: {
+          min: 0,
+          grid: { color: "rgba(0,0,0,0.06)" },
+          ticks: { font: { size: 11 }, callback: v => v.toFixed(2) }
+        }
+      }
+    }
+  });
+}
+
+
 //render comparison of all models
 function renderModelComparison(allModels, bestModel) {
   const section = document.createElement("div");
@@ -368,7 +470,7 @@ function displayResults(data) {
     resultsPanel.appendChild(renderConfusionMatrix(confusionMatrix));
   }
 
-  //All models comparison
+  // All models comparison
   if (
     data.all_models_metrics &&
     Object.keys(data.all_models_metrics).length > 1
@@ -376,6 +478,11 @@ function displayResults(data) {
     resultsPanel.appendChild(
       renderModelComparison(data.all_models_metrics, data.best_model),
     );
+  }
+
+  // Optimal k chart (clustering only)
+  if (data.optimal_k && data.k_scores) {
+    resultsPanel.appendChild(renderKChart(data.optimal_k, data.k_scores));
   }
 }
 
@@ -489,10 +596,7 @@ async function trainModel() {
     if (task === "classification" || task === "regression") {
       body.target_column = target;
     }
-    if (task === "clustering") {
-      const k = parseInt(document.getElementById("nClusters").value, 10);
-      body.n_clusters = isNaN(k) || k < 2 ? 3 : k;
-    }
+    // clustering: optimal k is now auto-detected by the backend
 
     const res = await fetch(`${BASE_URL}/train`, {
       method: "POST",
